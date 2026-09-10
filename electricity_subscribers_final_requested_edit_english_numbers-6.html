@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>إدارة مشتركي الكهرباء - نسخة الفحص الكاملة</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f7;color:#17202a;font-family:Tahoma,Arial,sans-serif}
+button,input,select{font:inherit}button{cursor:pointer;border:0;border-radius:11px;padding:11px 14px}.wrap{max-width:900px;margin:auto}
+header{background:#1464a5;color:#fff;padding:15px;position:sticky;top:0;z-index:10}.head{display:flex;align-items:center;gap:10px}.head h1{font-size:21px;margin:0;flex:1}.back{background:#ffffff22;color:#fff}
+main{padding:15px}.screen{display:none}.screen.active{display:block}.title{font-size:21px;font-weight:bold;margin-bottom:15px}
+.primary{background:#1464a5;color:#fff}.secondary{background:#e9eef3}.danger{background:#c0392b;color:#fff}.success{background:#18864b;color:#fff}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.actions input{flex:1;min-width:190px}
+input,select{width:100%;padding:12px;border:1px solid #cbd3da;border-radius:10px;background:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:11px}.card,.item,.box{background:#fff;border:1px solid #e1e5e8;border-radius:14px;padding:15px;box-shadow:0 2px 8px #0000000a}
+.card{cursor:pointer}.card b{font-size:17px;display:block;margin-bottom:5px}.muted{color:#697586;font-size:13px}
+.list{display:flex;flex-direction:column;gap:9px}.item{display:flex;justify-content:space-between;gap:10px;align-items:center}.item .grow{flex:1;cursor:pointer;padding:10px 4px;min-height:68px;display:flex;flex-direction:column;justify-content:center}
+.source-item .grow b{font-size:22px;line-height:1.45}
+.source-item{min-height:88px}
+.gear{width:48px;height:48px;padding:0;border-radius:12px;background:#e9eef3;color:#17202a;font-size:25px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.gear:active{transform:scale(.96)}
+.balance{text-align:center;padding:20px;border-radius:15px;background:#eef6ff;margin-bottom:12px}.balance .big{font-size:28px;font-weight:bold}
+.debit{color:#c0392b}.credit{color:#16854a}.zero{color:#1464a5}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px}.stat{background:#fff;border:1px solid #e1e5e8;border-radius:12px;padding:13px}.stat span{display:block;color:#697586;font-size:12px}.stat b{font-size:18px;display:block;margin-top:6px}
+.tabs{display:flex;gap:7px;overflow:auto;margin-bottom:14px}.tabs button{white-space:nowrap;background:#fff;border:1px solid #ccd4dc}.tabs button.active{background:#1464a5;color:#fff}
+.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:11px}.field label{display:block;font-weight:bold;margin-bottom:6px}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}th,td{padding:10px;border-bottom:1px solid #eee;text-align:right;font-size:13px}
+.badge{display:inline-block;padding:4px 8px;border-radius:15px;background:#edf1f5;font-size:12px}.empty{text-align:center;padding:35px;color:#777;background:#fff;border-radius:13px}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:16px;z-index:30}.modal.show{display:flex}.modalbox{background:#fff;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:16px;padding:19px}
+.modalbox h2{margin-top:0}.close{float:left;background:#eee}.note{background:#fff8df;padding:11px;border-radius:10px;font-size:13px;margin-bottom:12px}
+.section{margin-top:17px}.section h2{font-size:18px}.rowline{padding:11px 0;border-bottom:1px solid #eee}.rowline:last-child{border:0}
+@media(max-width:600px){.wrap{width:100%}main{padding:11px}.item{align-items:flex-start;flex-direction:column}.item .actions{margin:0;width:100%}.item .actions button{flex:1}}
+
+.source-item{position:relative;cursor:pointer}
+.source-item .gear{position:absolute;left:12px;right:auto;top:28px;bottom:auto;z-index:5;line-height:1}
+.subscriber-item{position:relative;cursor:pointer}.subscriber-item .subscriber-gear{position:absolute;left:12px;right:auto;top:28px;bottom:auto;z-index:5;line-height:1}</style>
+</head>
+<body>
+<div class="wrap">
+<header><div class="head"><button id="back" class="back" onclick="back()" style="display:none">← رجوع</button><h1 id="headTitle">إدارة مشتركي الكهرباء</h1></div></header>
+<main>
+<section id="home" class="screen active"></section>
+<section id="source" class="screen"></section>
+<section id="subs" class="screen"></section>
+<section id="account" class="screen"></section>
+<section id="section" class="screen"></section>
+</main></div>
+<div id="modal" class="modal"><div id="modalbox" class="modalbox"></div></div>
+
+<script>
+const KEY="electricity_full_preview_v3";
+let db=JSON.parse(localStorage.getItem(KEY)||'{"sources":[]}');
+let sourceId=null,subId=null,history=[];
+const $=id=>document.getElementById(id), source=()=>db.sources.find(x=>x.id===sourceId), sub=()=>source()?.subscribers.find(x=>x.id===subId);
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2)}
+const GOOGLE_CLIENT_ID="321420497072-e64i0960jqsdlkse1655bv2sumnqlvlb.apps.googleusercontent.com";
+const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";
+const DRIVE_FILE_NAME="electricity_subscribers_cloud_backup.json";
+let googleTokenClient=null, googleAccessToken=null, driveFileId=null, driveSyncTimer=null, lastSavedSerialized=localStorage.getItem(KEY)||JSON.stringify(db), driveSyncInProgress=false;
+function save(){
+  const serialized=JSON.stringify(db);
+  if(serialized===lastSavedSerialized)return;
+  lastSavedSerialized=serialized;
+  localStorage.setItem(KEY,serialized);
+  scheduleDriveSync();
+}
+window.addEventListener('beforeunload',()=>{const serialized=JSON.stringify(db);localStorage.setItem(KEY,serialized)});
+function scheduleDriveSync(){
+  clearTimeout(driveSyncTimer);
+  driveSyncTimer=setTimeout(()=>{if(googleAccessToken) googleDriveBackup(true)},1200);
+}
+function initGoogleDrive(){
+  if(!window.google?.accounts?.oauth2)return;
+  googleTokenClient=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,callback:(resp)=>{
+    if(resp.error){setDriveStatus('تعذر تسجيل الدخول إلى Google Drive: '+resp.error);return;}
+    googleAccessToken=resp.access_token;
+    setDriveStatus('تم الاتصال بـ Google Drive');
+    googleDriveBackup(true);
+  }});
+}
+function setDriveStatus(text){const el=$('driveStatus');if(el)el.textContent=text}
+function connectGoogleDrive(){
+  if(location.protocol==='file:'){alert('لكي يعمل الربط الحقيقي مع Google Drive، يجب تشغيل ملف التطبيق من رابط HTTPS وليس فتحه مباشرة كملف على الهاتف.');return;}
+  if(!googleTokenClient){initGoogleDrive();setTimeout(()=>connectGoogleDrive(),700);return;}
+  googleTokenClient.requestAccessToken({prompt:googleAccessToken?'':'consent'});
+}
+async function driveRequest(url,options={}){
+  if(!googleAccessToken)throw new Error('NO_TOKEN');
+  const headers=Object.assign({},options.headers||{},{Authorization:'Bearer '+googleAccessToken});
+  const r=await fetch(url,Object.assign({},options,{headers}));
+  if(r.status===401){googleAccessToken=null;throw new Error('AUTH_EXPIRED')}
+  if(!r.ok)throw new Error('HTTP_'+r.status);
+  return r;
+}
+async function getDriveFile(){
+  const q=encodeURIComponent("name = '"+DRIVE_FILE_NAME.replace(/'/g,"\'")+"' and trashed = false");
+  const r=await driveRequest('https://www.googleapis.com/drive/v3/files?q='+q+'&spaces=drive&fields=files(id,name,modifiedTime)');
+  const j=await r.json();
+  return j.files?.[0]||null;
+}
+async function googleDriveBackup(silent=false){
+  if(!googleAccessToken){if(!silent)connectGoogleDrive();return;}
+  if(driveSyncInProgress)return;
+  driveSyncInProgress=true;
+  try{
+    const file=await getDriveFile();
+    const payload={version:1,updatedAt:new Date().toISOString(),sources:db.sources};
+    const body=JSON.stringify(payload);
+    const metadata={name:DRIVE_FILE_NAME,mimeType:'application/json'};
+    let r;
+    if(file){
+      driveFileId=file.id;
+      const form=new FormData();
+      form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+      form.append('file',new Blob([body],{type:'application/json'}));
+      r=await driveRequest('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(file.id)+'?uploadType=multipart&fields=id,modifiedTime',{method:'PATCH',body:form});
+    }else{
+      const form=new FormData();
+      form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+      form.append('file',new Blob([body],{type:'application/json'}));
+      r=await driveRequest('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime',{method:'POST',body:form});
+      const j=await r.json();driveFileId=j.id;
+    }
+    setDriveStatus('تمت المزامنة تلقائيًا مع Google Drive');
+  }catch(e){
+    if(e.message==='AUTH_EXPIRED'){setDriveStatus('انتهت جلسة Google، اضغط اتصال Google Drive من جديد');}
+    else if(!silent)alert('تعذر المزامنة مع Google Drive. تأكد من الإنترنت وإعداد OAuth.');
+    else setDriveStatus('المزامنة غير متاحة حاليًا — تم حفظ البيانات على الجهاز');
+  }finally{driveSyncInProgress=false}
+}
+async function googleDriveRestore(){
+  if(!googleAccessToken){connectGoogleDrive();return;}
+  try{
+    const file=await getDriveFile();
+    if(!file){alert('لا توجد نسخة بيانات للتطبيق في Google Drive بعد.');return;}
+    const r=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
+    const parsed=await r.json();
+    if(!parsed || !Array.isArray(parsed.sources))throw new Error();
+    if(!confirm('سيتم استبدال البيانات الحالية بالنسخة الموجودة في Google Drive. هل تريد المتابعة؟'))return;
+    db={sources:parsed.sources};
+    lastSavedSerialized=JSON.stringify(db);
+    localStorage.setItem(KEY,lastSavedSerialized);
+    location.reload();
+  }catch(e){alert('تعذر استعادة النسخة من Google Drive. تأكد من الاتصال وإعداد OAuth.');}
+}
+function driveMenu(){
+  modal(`<h2>Google Drive</h2><div class="note">تتم مزامنة بيانات التطبيق في ملف واحد داخل Google Drive. استخدم نفس حساب Google على الهاتف والكمبيوتر.</div><div class="box"><b id="driveStatus">غير متصل بـ Google Drive</b></div><div class="actions" style="margin-top:12px;display:flex;flex-direction:column;gap:9px"><button class="primary" style="width:100%" onclick="connectGoogleDrive()">☁️ اتصال Google Drive</button><button class="secondary" style="width:100%" onclick="googleDriveBackup(false)">↑ مزامنة الآن</button><button class="secondary" style="width:100%" onclick="googleDriveRestore()">↓ استعادة من Google Drive</button></div><button class="secondary" style="width:100%;margin-top:8px" onclick="closeModal()">إغلاق</button>`);
+  if(googleAccessToken)setDriveStatus('تم الاتصال بـ Google Drive');
+}
+setTimeout(initGoogleDrive,500);
+function fmt(n){return Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2})}
+function money(n){return fmt(Math.abs(n))+" شيكل"}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function today(){return new Date().toISOString().slice(0,10)}
+function nav(id,title,back=true){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');$('headTitle').textContent=title||'إدارة مشتركي الكهرباء';$('back').style.display=back?'block':'none'}
+function push(fn){history.push(fn)}
+function back(){if(history.length){let f=history.pop();f()}else home()}
+function home(){history=[];sourceId=null;subId=null;nav('home','إدارة مشتركي الكهرباء',false);renderHome()}
+function renderHome(){
+$('home').innerHTML=`<div class="title">مصادر الكهرباء</div>
+<div class="list">${db.sources.length?db.sources.map(s=>`<div class="item source-item" onclick="openSource('${s.id}')"><div class="grow"><b>${esc(s.name)}</b><div class="muted">فتح بيانات المصدر</div></div><button class="gear" aria-label="إعدادات المصدر" onclick="event.stopPropagation();sourceMenu('${s.id}')">⚙</button></div>`).join(''):'<div class="empty">لا توجد مصادر كهرباء</div>'}</div>
+<button class="primary" style="width:100%;margin-top:14px" onclick="sourceModal()">+ إضافة مصدر كهرباء</button>
+<div class="section"><button class="secondary" style="width:100%" onclick="backupMenu()">النسخ الاحتياطي والاستعادة وحذف البيانات</button></div>`}
+function sourceModal(id=null){
+let s=id?db.sources.find(x=>x.id===id):{name:'',mainMeter:false};
+modal(`<h2>${id?'تعديل مصدر الكهرباء':'إضافة مصدر كهرباء'}</h2><div class="form">
+<div class="field"><label>اسم المصدر</label><input id="mname" value="${esc(s.name)}"></div>
+<div class="field"><label><input id="mmain" type="checkbox" ${s.mainMeter?'checked':''} style="width:auto"> يوجد عداد رئيسي</label></div>
+<button class="primary" onclick="saveSource('${id||''}')">${id?'حفظ':'إضافة'}</button><button class="secondary" onclick="closeModal()">إلغاء</button></div>`)}
+function saveSource(id){let n=$('mname').value.trim();if(!n)return alert('اكتب اسم المصدر');if(id){let s=db.sources.find(x=>x.id===id);s.name=n;s.mainMeter=$('mmain').checked}else db.sources.push({id:uid(),name:n,mainMeter:$('mmain').checked,subscribers:[],mainReadings:[]});save();closeModal();renderHome()}
+function editSource(id){sourceModal(id)}
+function sourceMenu(id){
+ let s=db.sources.find(x=>x.id===id);
+ modal(`<h2>إعدادات ${esc(s.name)}</h2>
+ <div class="actions" style="display:flex;flex-direction:column;gap:10px">
+   <button class="secondary" style="width:100%" onclick="closeModal();editSource('${id}')">✎ تعديل اسم المصدر</button>
+   <button class="danger" style="width:100%" onclick="closeModal();delSource('${id}')">🗑 حذف المصدر</button>
+ </div>
+ <button class="secondary" style="width:100%;margin-top:8px" onclick="closeModal()">إلغاء</button>`);
+}
+function delSource(id){if(confirm('حذف المصدر وجميع بياناته؟ لا يمكن التراجع عن ذلك.')){db.sources=db.sources.filter(x=>x.id!==id);save();renderHome()}}
+function openSource(id){push(home);sourceId=id;nav('source',source().name);renderSource()}
+function renderSource(){
+let s=source();$('source').innerHTML=`<div class="title">${esc(s.name)}</div><div class="grid">
+${card('المشتركين','إضافة وتعديل وبحث وفتح الحساب','subs')}
+${card('الفواتير','الفواتير وحالات الدفع','invoices')}
+${card('الدفعات','دفعات عامة ودفعات مرتبطة بالفواتير','payments')}
+${card('القراءات','كل القراءات القديمة والجديدة','readings')}
+${card('الأرصدة والمديونيات','الرصيد والحركات المالية','balances')}
+${s.mainMeter?card('العداد الرئيسي','قراءات العداد والفرق والفاقد','mainmeter'):''}
+${card('التقارير','تقارير شهرية وتاريخية للمصدر','reports')}
+${card('إعدادات المصدر','تعديل الاسم أو حذف المصدر','settings')}</div>`}
+function card(a,b,c){return `<div class="card" onclick="openSection('${c}')"><b>${a}</b><span class="muted">${b}</span></div>`}
+function openSection(type){push(()=>{nav('source',source().name);renderSource()});if(type==='subs')return showSubs();nav('section',typeTitle(type));renderSection(type)}
+function typeTitle(t){return ({invoices:'الفواتير',payments:'الدفعات',readings:'القراءات',balances:'الأرصدة والمديونيات',mainmeter:'العداد الرئيسي',reports:'التقارير',settings:'إعدادات المصدر'})[t]}
+function showSubs(){nav('subs',source().name);renderSubs()}
+function renderSubs(){
+let s=source(),q=($('q')?.value||'').trim().toLowerCase(),arr=s.subscribers.filter(x=>x.name.toLowerCase().includes(q)||(x.meter||'').toLowerCase().includes(q));
+$('subs').innerHTML=`<div class="title">المشتركون</div><div class="actions"><input id="q" placeholder="البحث عن المشترك أو العداد" value="${esc(q)}" oninput="renderSubs()"></div>
+<div class="list">${arr.length?arr.map(x=>{let b=balance(x);return `<div class="item subscriber-item" onclick="openAccount('${x.id}')"><div class="grow"><b>${esc(x.name)}</b><div class="muted">العداد: ${esc(x.meter||'-')} • سعر الكيلو: ${fmt(x.price)}</div></div><button class="gear subscriber-gear" aria-label="إعدادات المشترك" onclick="event.stopPropagation();subscriberMenu('${x.id}')">⚙</button></div>`}).join(''):'<div class="empty">لا يوجد مشتركون</div>'}</div>
+<button class="primary" style="width:100%;margin-top:13px" onclick="subModal()">+ إضافة مشترك</button>`}
+function subModal(id=null){
+let s=id?source().subscribers.find(x=>x.id===id):{name:'',meter:'',price:1,reading:0,opening:0};
+modal(`<h2>${id?'تعديل المشترك':'إضافة مشترك'}</h2><div class="formgrid">
+<div class="field"><label>اسم المشترك</label><input id="sn" value="${esc(s.name)}"></div>
+<div class="field"><label>رقم أو اسم العداد</label><input id="sm" value="${esc(s.meter)}"></div>
+<div class="field"><label>سعر الكيلوواط</label><input id="sp" type="number" step=".01" value="${s.price}"></div>
+<div class="field"><label>القراءة الأولى أو الحالية</label><input id="sr" type="number" value="${s.reading}"></div>
+<div class="field"><label>المديونية السابقة أو الرصيد السابق</label><input id="so" type="number" step=".01" value="${s.opening}"></div>
+</div><div class="actions"><button class="primary" onclick="saveSub('${id||''}')">${id?'حفظ':'إضافة'}</button><button class="secondary" onclick="closeModal()">إلغاء</button></div>`)}
+function saveSub(id){
+let name=$('sn').value.trim();if(!name)return alert('اكتب اسم المشترك');
+if(id){let s=sub();s.name=name;s.meter=$('sm').value.trim();s.price=Number($('sp').value||0);s.reading=Number($('sr').value||0);s.opening=Number($('so').value||0)}
+else source().subscribers.push({id:uid(),name,meter:$('sm').value.trim(),price:Number($('sp').value||0),reading:Number($('sr').value||0),opening:Number($('so').value||0),readings:[],invoices:[],payments:[]});
+save();closeModal();renderSubs()}
+function delSub(id){if(confirm('حذف المشترك وجميع سجلاته؟')){source().subscribers=source().subscribers.filter(x=>x.id!==id);save();renderSubs()}}
+function subscriberMenu(id){
+ let x=source().subscribers.find(s=>s.id===id);
+ if(!x)return;
+ modal(`<h2>إعدادات ${esc(x.name)}</h2><div class="actions" style="display:flex;flex-direction:column;gap:10px">
+ <button class="secondary" style="width:100%" onclick="closeModal();subModal('${id}')">✎ تعديل المشترك</button>
+ <button class="danger" style="width:100%" onclick="closeModal();delSub('${id}')">حذف المشترك</button>
+ <button class="secondary" style="width:100%" onclick="closeModal()">إلغاء</button>
+ </div>`);
+}
+
+function balance(s){return Number(s.opening||0)+s.invoices.reduce((a,x)=>a+x.total,0)-s.payments.reduce((a,x)=>a+x.amount,0)}
+function balanceText(b){return b>0?'عليه '+money(b):b<0?'له '+money(b):'الرصيد صفر'}
+function openAccount(id){push(showSubs);subId=id;nav('account',sub().name);renderAccount()}
+function renderAccount(){
+let s=sub(),b=balance(s),inv=s.invoices.reduce((a,x)=>a+x.total,0),con=s.readings.reduce((a,x)=>a+x.consumption,0),pay=s.payments.reduce((a,x)=>a+x.amount,0);
+let readings=s.readings.slice().reverse().map(r=>`<div class="rowline"><b>قراءة ${fmt(r.current)}</b><div class="muted">${r.date}</div><span>السابقة: ${fmt(r.previous)} • الحالية: ${fmt(r.current)} • الاستهلاك: ${fmt(r.consumption)} ك.و</span></div>`).join('');
+let invoices=s.invoices.slice().reverse().map(i=>{let p=s.payments.filter(x=>x.invoiceId===i.id).reduce((a,x)=>a+x.amount,0),rem=Math.max(0,i.total-p);return `<div class="rowline" onclick="invoiceModal('${i.id}')" style="cursor:pointer"><b>فاتورة ${i.id.slice(-5)}</b><div class="muted">${i.date} • السابقة ${fmt(i.previous)} • الحالية ${fmt(i.current)}</div><span>${money(i.total)} • ${p>=i.total?'مدفوعة بالكامل':p>0?'مدفوعة جزئيًا':'غير مدفوعة'} • اضغط للفتح</span></div>`}).join('');
+$('account').innerHTML=`<div class="title">${esc(s.name)}</div><div class="balance ${b>0?'debit':b<0?'credit':'zero'}"><div class="big">${balanceText(b)}</div></div>
+<div class="stats"><div class="stat"><span>مجموع الفواتير</span><b>${money(inv)}</b></div><div class="stat"><span>مجموع الاستهلاك</span><b>${fmt(con)} ك.و</b></div><div class="stat"><span>مجموع الدفعات</span><b>${money(pay)}</b></div></div>
+<div class="actions" style="margin-top:13px"><button class="primary" onclick="readingModal()">+ قراءة / فاتورة</button><button class="success" onclick="paymentModal()">+ دفعة</button><button class="secondary" onclick="subModal('${s.id}')">تعديل</button></div>
+<div class="section"><h2>سجل القراءات</h2>${readings||'<div class="empty">لا توجد قراءات</div>'}</div>
+<div class="section"><h2>الفواتير</h2>${invoices||'<div class="empty">لا توجد فواتير</div>'}</div>
+<div class="section"><h2>سجل حركات المشترك</h2>${ledger(s)}</div>`}
+function ledger(s){
+let rows=[{date:'',desc:'المديونية السابقة / الرصيد السابق',amount:s.opening,type:'مديونية/رصيد'}];
+s.invoices.forEach(i=>rows.push({date:i.date,desc:`فاتورة ${i.id.slice(-5)}`,amount:i.total,type:'فاتورة'}));
+s.payments.forEach(p=>rows.push({date:p.date,desc:p.invoiceId?'دفعة على فاتورة':'دفعة عامة',amount:-p.amount,type:'دفعة'}));
+return rows.map(r=>`<div class="rowline"><b>${esc(r.desc)}</b><div class="muted">${r.date} • ${r.type}</div><span>${fmt(Math.abs(r.amount))} شيكل</span></div>`).join('')}
+function invoiceModal(id){
+let s=sub(),i=s.invoices.find(x=>x.id===id);if(!i)return;
+let paid=s.payments.filter(p=>p.invoiceId===id).reduce((a,p)=>a+p.amount,0);
+let rem=i.total-paid;
+modal(`<h2>فاتورة ${i.id.slice(-5)}</h2>
+<div class="stats">
+<div class="stat"><span>التاريخ</span><b>${i.date}</b></div>
+<div class="stat"><span>القراءة السابقة</span><b dir="ltr">${Number(i.previous).toLocaleString('en-US')}</b></div>
+<div class="stat"><span>القراءة الحالية</span><b dir="ltr">${Number(i.current).toLocaleString('en-US')}</b></div>
+<div class="stat"><span>الاستهلاك</span><b dir="ltr">${Number(i.consumption).toLocaleString('en-US')} ك.و</b></div>
+<div class="stat"><span>سعر الكيلو</span><b>${money(i.price)}</b></div>
+<div class="stat"><span>قيمة الفاتورة</span><b>${money(i.total)}</b></div>
+<div class="stat"><span>المدفوع</span><b>${money(paid)}</b></div>
+<div class="stat"><span>المتبقي</span><b>${money(Math.max(0,rem))}</b></div>
+</div>
+<button class="secondary" style="width:100%;margin-top:12px" onclick="closeModal()">إغلاق</button>`)}
+
+function readingModal(){
+let s=sub(),prev=s.readings.length?s.readings[s.readings.length-1].current:s.reading||0;
+modal(`<h2>إدخال قراءة جديدة</h2><div class="form"><label>التاريخ</label><input id="rd" type="date" value="${today()}"><label>القراءة السابقة</label><input id="rp" type="number" value="${prev}"><label>القراءة الجديدة</label><input id="rn" type="number"><div class="note">سيتم إنشاء فاتورة تلقائيًا: الاستهلاك × سعر الكيلوواط.</div><button class="primary" onclick="saveReading()">حفظ وإنشاء الفاتورة</button><button class="secondary" onclick="closeModal()">إلغاء</button></div>`)}
+function saveReading(){
+let s=sub(),prev=Number($('rp').value),cur=Number($('rn').value);if(cur<prev)return alert('القراءة الجديدة أقل من السابقة');let c=cur-prev,d=$('rd').value;
+let inv={id:uid(),date:d,previous:prev,current:cur,consumption:c,price:s.price,total:c*s.price};s.readings.push({id:uid(),date:d,previous:prev,current:cur,consumption:c});s.invoices.push(inv);s.reading=cur;save();closeModal();renderAccount()}
+function paymentModal(){
+let s=sub(),opts=s.invoices.map(i=>`<option value="${i.id}">فاتورة ${i.date} - ${money(i.total)}</option>`).join('');
+modal(`<h2>تسجيل دفعة</h2><div class="form"><label>التاريخ</label><input id="pd" type="date" value="${today()}"><label>المبلغ</label><input id="pa" type="number" step=".01"><label>نوع الدفعة</label><select id="pt"><option value="general">دفعة عامة للمشترك</option><option value="invoice">دفعة مرتبطة بفاتورة محددة</option></select><label>الفاتورة</label><select id="pi"><option value="">-- بدون فاتورة --</option>${opts}</select><div class="note">الدفع الأكبر من المتبقي مسموح، والزيادة تصبح رصيدًا دائنًا للمشترك.</div><button class="success" onclick="savePayment()">تسجيل الدفعة</button><button class="secondary" onclick="closeModal()">إلغاء</button></div>`)}
+function savePayment(){
+let s=sub(),a=Number($('pa').value||0);if(a<=0)return alert('أدخل مبلغًا صحيحًا');let iid=$('pt').value==='invoice'?$('pi').value:null;
+s.payments.push({id:uid(),date:$('pd').value,amount:a,invoiceId:iid});save();closeModal();renderAccount()}
+function renderSection(t){
+let s=source();
+if(t==='invoices') return $('section').innerHTML=allInvoices(s);
+if(t==='payments') return $('section').innerHTML=allPayments(s);
+if(t==='readings') return $('section').innerHTML=allReadings(s);
+if(t==='balances') return $('section').innerHTML=allBalances(s);
+if(t==='mainmeter') return $('section').innerHTML=mainMeter(s);
+if(t==='reports') return $('section').innerHTML=reports(s);
+if(t==='settings') return $('section').innerHTML=settings(s);
+}
+function allInvoices(s){
+let rows=[];
+s.subscribers.forEach(x=>x.invoices.forEach(i=>{
+let p=x.payments.filter(p=>p.invoiceId===i.id).reduce((a,p)=>a+p.amount,0),rem=i.total-p;
+rows.push(`<tr onclick="invoiceFromSource('${x.id}','${i.id}')" style="cursor:pointer"><td>${esc(x.name)}</td><td>${i.date}</td><td dir="ltr">${Number(i.previous).toLocaleString('en-US')}</td><td dir="ltr">${Number(i.current).toLocaleString('en-US')}</td><td dir="ltr">${Number(i.consumption).toLocaleString('en-US')}</td><td dir="ltr">${Number(i.total).toLocaleString('en-US')}</td><td dir="ltr">${Math.max(0,Number(rem)).toLocaleString('en-US')}</td><td>${p>=i.total?'مدفوعة بالكامل':p>0?'مدفوعة جزئيًا':'لم يتم الدفع'}</td></tr>`)
+}));
+return tablePage('الفواتير',['المشترك','التاريخ','السابقة','الجديدة','الاستهلاك','القيمة','المتبقي','الحالة'],rows)}
+function allPayments(s){
+let rows=[];s.subscribers.forEach(x=>x.payments.forEach(p=>rows.push(`<tr><td>${esc(x.name)}</td><td>${p.date}</td><td>${money(p.amount)}</td><td>${p.invoiceId?'مرتبطة بفاتورة':'دفعة عامة'}</td><td>${p.invoiceId||'-'}</td></tr>`)));return tablePage('الدفعات',['المشترك','التاريخ','المبلغ','النوع','الفاتورة'],rows)}
+function allReadings(s){
+let rows=[];s.subscribers.forEach(x=>x.readings.forEach(r=>rows.push(`<tr><td>${esc(x.name)}</td><td>${r.date}</td><td>${fmt(r.previous)}</td><td>${fmt(r.current)}</td><td>${fmt(r.consumption)}</td></tr>`)));return tablePage('القراءات',['المشترك','التاريخ','السابقة','الجديدة','الاستهلاك'],rows)}
+function allBalances(s){
+let rows=s.subscribers.map(x=>`<tr><td>${esc(x.name)}</td><td>${money(x.opening)}</td><td>${money(x.invoices.reduce((a,i)=>a+i.total,0))}</td><td>${money(x.payments.reduce((a,p)=>a+p.amount,0))}</td><td>${balanceText(balance(x))}</td></tr>`);return tablePage('الأرصدة والمديونيات',['المشترك','الرصيد السابق','الفواتير','الدفعات','الرصيد الحالي'],rows)}
+function tablePage(title,heads,rows){return `<div class="title">${title}</div>${rows.length?`<div style="overflow:auto"><table><thead><tr>${heads.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:'<div class="empty">لا توجد بيانات</div>'}`}
+function mainMeter(s){
+let total=s.subscribers.reduce((a,x)=>a+x.readings.reduce((b,r)=>b+r.consumption,0),0);
+return `<div class="title">العداد الرئيسي</div><div class="note">يتم حفظ كل قراءة للعداد الرئيسي ولا يتم استبدال القراءات القديمة.</div>
+<div class="formgrid"><div><label>التاريخ</label><input id="md" type="date" value="${today()}"></div><div><label>القراءة السابقة</label><input id="mp" type="number"></div><div><label>القراءة الجديدة</label><input id="mn" type="number"></div></div><button class="primary" style="margin-top:12px" onclick="saveMain()">حفظ قراءة العداد الرئيسي</button>
+<div class="section"><div class="stats"><div class="stat"><span>مجموع استهلاك المشتركين</span><b>${fmt(total)} ك.و</b></div></div></div>
+<div class="section"><h2>السجل السابق</h2>${s.mainReadings.length?s.mainReadings.map(r=>`<div class="rowline"><b>${r.date}</b><div>السابقة: ${fmt(r.previous)} • الجديدة: ${fmt(r.current)}</div><div>استهلاك الرئيسي: ${fmt(r.consumption)} ك.و • مجموع المشتركين: ${fmt(r.subTotal)} • الفرق: ${fmt(r.difference)} ك.و • ${r.difference>=0?'فاقد':'زيادة'}: ${fmt(Math.abs(r.difference))} ك.و</div></div>`).join(''):'<div class="empty">لا توجد قراءات</div>'}</div>`}
+function saveMain(){let s=source(),p=Number($('mp').value),n=Number($('mn').value);if(n<p)return alert('القراءة الجديدة أقل من السابقة');let st=s.subscribers.reduce((a,x)=>a+x.readings.reduce((b,r)=>b+r.consumption,0),0),c=n-p;s.mainReadings.push({date:$('md').value,previous:p,current:n,consumption:c,subTotal:st,difference:c-st});save();renderSection('mainmeter')}
+function reports(s){
+let months=[...new Set(s.subscribers.flatMap(x=>[...x.invoices.map(i=>i.date.slice(0,7)),...x.payments.map(p=>p.date.slice(0,7))]))].sort().reverse();let m=months[0]||today().slice(0,7);
+return `<div class="title">التقارير الشهرية للمصدر</div><div class="formgrid"><div><label>الشهر والسنة</label><input id="rm" type="month" value="${m}" onchange="renderReportMonth(this.value)"></div></div><div id="reportbox">${reportMonth(s,m)}</div>`}
+function renderReportMonth(m){$('reportbox').innerHTML=reportMonth(source(),m)}
+function reportMonth(s,m){
+let ss=s.subscribers,inv=ss.flatMap(x=>x.invoices.filter(i=>i.date.startsWith(m))),pay=ss.flatMap(x=>x.payments.filter(p=>p.date.startsWith(m))),cons=inv.reduce((a,x)=>a+x.consumption,0),total=inv.reduce((a,x)=>a+x.total,0),paid=pay.reduce((a,x)=>a+x.amount,0),debt=ss.reduce((a,x)=>a+Math.max(0,balance(x)),0),credit=ss.reduce((a,x)=>a+Math.max(0,-balance(x)),0);
+return `<div class="section"><div class="stats"><div class="stat"><span>عدد المشتركين</span><b>${ss.length}</b></div><div class="stat"><span>مجموع الاستهلاك</span><b>${fmt(cons)} ك.و</b></div><div class="stat"><span>عدد الفواتير</span><b>${inv.length}</b></div><div class="stat"><span>إجمالي الفواتير</span><b>${money(total)}</b></div><div class="stat"><span>إجمالي المدفوع</span><b>${money(paid)}</b></div><div class="stat"><span>إجمالي المديونية الحالية</span><b>${money(debt)}</b></div><div class="stat"><span>الأرصدة الدائنة</span><b>${money(credit)}</b></div></div></div>
+<div class="section"><h3>حالات الفواتير</h3>${invoiceStatus(inv,ss)}</div>`}
+function invoiceStatus(inv,ss){let a={none:0,part:0,full:0};inv.forEach(i=>{let p=ss.flatMap(x=>x.payments).filter(p=>p.invoiceId===i.id).reduce((z,p)=>z+p.amount,0);p>=i.total?a.full++:p>0?a.part++:a.none++});return `لم يتم الدفع: ${a.none} • مدفوعة جزئيًا: ${a.part} • مدفوعة بالكامل: ${a.full}`}
+function settings(s){return `<div class="title">إعدادات المصدر</div><div class="box"><div class="actions"><button class="primary" onclick="sourceModal('${s.id}')">تعديل اسم المصدر وإعداد العداد</button><button class="danger" onclick="delSource('${s.id}');home()">حذف المصدر</button></div></div>`}
+function backupMenu(){modal(`<h2>البيانات</h2><div class="actions"><button class="primary" onclick="exportJSON()">تصدير نسخة JSON</button><button class="secondary" onclick="importJSON()">استعادة نسخة JSON</button><button class="primary" onclick="driveMenu()">☁️ Google Drive</button><button class="danger" onclick="wipe()">حذف جميع البيانات</button></div><button class="secondary" onclick="closeModal()">إغلاق</button>`)}
+function exportJSON(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='electricity_subscribers_backup.json';a.click();URL.revokeObjectURL(a.href)}
+function importJSON(){let i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.sources)throw 0;if(!confirm('استبدال جميع البيانات الحالية بالنسخة الاحتياطية؟'))return;db=x;save();closeModal();home()}catch(e){alert('ملف JSON غير صالح')}};r.readAsText(f)};i.click()}
+function wipe(){if(confirm('تحذير: سيتم حذف جميع المصادر والمشتركين والفواتير والدفعات والقراءات والتقارير نهائيًا. هل أنت متأكد؟')){if(confirm('تأكيد أخير: حذف جميع بيانات التطبيق؟')){db={sources:[]};save();closeModal();home()}}}
+function closeModal(){$('modal').classList.remove('show')}
+function modal(h){$('modalbox').innerHTML=h;$('modal').classList.add('show')}
+home();
+
+</script>
+</body>
+</html>
